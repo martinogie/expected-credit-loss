@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Credit Loss Reserve</title>
+<meta name="description" content="CECL and IFRS 9 expected credit loss for a consumer loan book: macro scenarios, staging, quarterly allowance roll-forward and an out-of-time backtest.">
+<style>
+/* Layout: a reserve committee view. Headline allowance, then the scenario weights that drive it,
+   the scenarios themselves, the allowance by grade, the roll-forward, and the evidence. */
+:root{color-scheme:light;
+  --page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--up:#2a78d6;--down:#e34948;--accent:#5a3e8c;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--up:#3987e5;--down:#e66767;--accent:#b49be0}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--up:#3987e5;--down:#e66767;--accent:#b49be0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 56px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(26px,4vw,34px);line-height:1.1;margin:4px 0 6px;letter-spacing:-.01em}
+h2{font-size:15px;margin:0 0 10px}
+p{margin:0 0 10px;max-width:75ch}
+.lede{color:var(--ink2)}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}
+.links a{font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;border:1px solid var(--ring);background:var(--surface);padding:6px 12px;border-radius:999px}
+.links a:hover,.links a:focus-visible{border-color:var(--s1);outline:none}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px;min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.kpi .k{font-size:12px;color:var(--ink2)} .kpi .v{font-size:26px;font-weight:600;margin:2px 0} .kpi .s{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px;margin-bottom:14px}
+.grid2.even{grid-template-columns:repeat(2,minmax(0,1fr))}
+.weights{display:flex;flex-direction:column;gap:12px}
+.w label{display:flex;justify-content:space-between;font-weight:600;font-size:14px}
+.w label span.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:0}
+.w output{font-variant-numeric:tabular-nums;font-weight:600}
+.w input{width:100%;accent-color:var(--accent)}
+.w .hint{font-size:12px;color:var(--muted)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font:600 12px var(--sans);color:var(--ink);background:transparent;border:1px solid var(--ring);border-radius:999px;padding:5px 10px;cursor:pointer}
+.presets button:hover,.presets button:focus-visible{border-color:var(--accent);outline:none}
+.seg{display:inline-flex;border:1px solid var(--ring);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.seg button{font:600 12px var(--sans);background:transparent;color:var(--ink2);border:0;padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--grid);white-space:nowrap;font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.03em}
+tr.tot td{font-weight:700;border-top:1px solid var(--ink2)}
+.chart{position:relative}
+.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.gl{stroke:var(--grid)} .ax{stroke:var(--axis)}
+.tk{fill:var(--muted);font:11px var(--sans);font-variant-numeric:tabular-nums}
+.lab{fill:var(--ink2);font:600 11px var(--sans);font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink2);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:2px;margin-right:5px;vertical-align:3px}
+.legend i.sq{width:10px;height:10px;border-radius:2px;vertical-align:-1px}
+.tip{position:absolute;pointer-events:none;background:var(--surface);color:var(--ink);border:1px solid var(--ring);box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:12px;padding:8px 10px;border-radius:8px;white-space:nowrap;opacity:0;transition:opacity .08s;z-index:3}
+.tip b{display:block;margin-bottom:2px}
+.tip .row{display:flex;justify-content:space-between;gap:14px;font-variant-numeric:tabular-nums}
+.note{font-size:13px;color:var(--ink2)}
+.sec{margin-top:26px}
+.sec ul{margin:0;padding-left:20px;max-width:85ch} .sec li{margin-bottom:6px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2,.grid2.even{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Credit risk · Allowance for credit losses</div>
+  <h1>Credit Loss Reserve</h1>
+  <p class="lede">Expected credit loss for a $291M consumer installment loan book at September 30, 2026, under US CECL (lifetime losses on every loan) and IFRS 9 (12-month losses unless credit risk has risen sharply). Move the scenario weights to see how much reserve each view of the economy needs.</p>
+  <div class="links"><a href="https://github.com/martinogie/expected-credit-loss">Source code on GitHub</a><a href="https://martinogie.github.io/credit-risk-scoring/">Loan Scorecard Studio</a><a href="https://martinogie.github.io/budget-variance-pack/">Budget Variance Pack</a><a href="https://martinogie.github.io/treasury-cash-forecasting/">Treasury Cash Forecast</a><a href="https://martinogie.github.io/settlement-liquidity-dashboard/">Settlement & Liquidity Dashboard</a></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2">
+    <div class="card"><h2>Scenario weights</h2>
+      <div class="weights" id="weights"></div>
+      <div class="presets" style="margin-top:12px"><button type="button" data-p="0.15,0.45,0.30,0.10">Committee weights</button><button type="button" data-p="0,1,0,0">Base only</button><button type="button" data-p="0,0.3,0.4,0.3">Recession-heavy</button></div>
+      <p class="note" style="margin-top:10px">Weights are rescaled to sum to 100%. Stages are held at the committee-weighted assessment.</p></div>
+    <div class="card"><h2>Unemployment rate scenarios, %</h2><div class="chart" id="c-u"></div>
+      <div class="legend" id="lg-u"></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px"><h2>Allowance by grade</h2><div class="tablewrap"><table id="t-grade"></table></div>
+    <p class="note" style="margin-top:8px">Stage 1: performing. Stage 2: significant increase in credit risk (30–89 days past due, or 12-month PD at least double its origination level and up 0.5 points or more). Stage 3: 90+ days past due.</p></div>
+
+  <div class="grid2 even">
+    <div class="card"><h2>Allowance roll-forward, Q3 2026, $M</h2>
+      <div class="seg" role="group" aria-label="Accounting basis"><button type="button" id="b-cecl" aria-pressed="true">CECL</button><button type="button" id="b-ifrs" aria-pressed="false">IFRS 9</button></div>
+      <div class="chart" id="c-rf"></div>
+      <p class="note" style="margin-top:8px">Ending = beginning − charge-offs + recoveries + provision. The provision is split by driver: new loans; payoffs (reserve released on loans that paid off); replenishing what charge-offs used beyond the reserve already held; credit migration and seasoning; and the macro outlook (the Q3 book valued under June's versus September's scenarios).</p></div>
+    <div class="card"><h2>Backtest: 12-month charge-off rate by grade</h2><div class="chart" id="c-bt"></div>
+      <div class="legend"><span><i class="sq" style="background:var(--ink2)"></i>Actual</span><span><i class="sq" style="background:var(--s1)"></i>Transition model</span><span><i class="sq" style="background:var(--s2)"></i>Historical loss rate</span></div>
+      <p class="note" style="margin-top:8px" id="bt-note"></p></div>
+  </div>
+
+  <div class="card"><h2>Cumulative charge-off rate by vintage</h2><div class="chart" id="c-v"></div><div class="legend" id="lg-v"></div>
+    <p class="note" style="margin-top:8px">Share of each year's originations charged off by months on book. Losses build fastest in the first 18 months. The 2025 vintage, with a riskier grade mix, runs above 2023–2024.</p></div>
+
+  <div class="sec">
+    <h2 style="font-size:18px">How it works</h2>
+    <ul class="note">
+      <li><strong>Probability of default (PD):</strong> four multinomial logistic models, one per delinquency state (current, 30, 60, 90 days), predict next month's state from grade, months on book, unemployment and recent delinquency. Chaining them month by month gives each loan's chance of charge-off in every future month, under any unemployment path.</li>
+      <li><strong>Loss given default (LGD):</strong> 1 − present value of recoveries ÷ balance at charge-off, by grade. Only charge-offs with a full 12-month recovery window are used (LGD <span id="lgd"></span>).</li>
+      <li><strong>Exposure at default (EAD):</strong> the scheduled balance three months before charge-off, discounted at each loan's own rate.</li>
+      <li><strong>Scenarios:</strong> four 24-month unemployment paths, reverting to a 4.6% long-run rate over the following 12 months, weighted 15/45/30/10. The September paths are worse than June's, which drives the macro line in the roll-forward.</li>
+    </ul>
+    <p class="note">All data is synthetic: 70,000 loans from 2021–2026, simulated with known grade, seasoning, macro and re-default effects so the models can be checked against the truth. Built with AI-assisted coding (Claude); the model design, validation and review are my own.</p>
+  </div>
+</div>
+<script>
+const D=/*DATA*/null;
+const $=id=>document.getElementById(id);
+const SC=D.scenarios, COL=["var(--s3)","var(--s1)","var(--s2)","var(--down)"];
+const fm=v=>(v<0?"−":"")+"$"+(Math.abs(v)/1e6).toFixed(2)+"M", fp=v=>(v*100).toFixed(2)+"%";
+let W=D.weights.slice(), basis="cecl";
+
+/* weights */
+$("weights").innerHTML=SC.map((s,i)=>`<div class="w"><label for="w${i}"><span><span class="sw" style="background:${COL[i]}"></span>${s}</span><output id="o${i}"></output></label><input type="range" id="w${i}" min="0" max="100" step="5" value="${D.weights[i]*100}"></div>`).join("");
+SC.forEach((_,i)=>$("w"+i).addEventListener("input",()=>{read();render()}));
+document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{b.dataset.p.split(",").forEach((v,i)=>$("w"+i).value=+v*100);read();render()}));
+function read(){const raw=SC.map((_,i)=>+$("w"+i).value),t=raw.reduce((a,b)=>a+b,0)||1;W=raw.map(r=>r/t)}
+
+function alw(){ /* allowance by grade under current weights */
+  const by={};D.segments.forEach(s=>{const g=by[s.grade]||(by[s.grade]={bal:0,cecl:0,s1:0,s2:0,s3:0,ifrs:0,loans:0});
+    const life=s.ecl_life.reduce((a,v,i)=>a+v*W[i],0),m12=s.ecl12.reduce((a,v,i)=>a+v*W[i],0);
+    g.bal+=s.balance;g.loans+=s.loans;g.cecl+=life;const e=s.stage===1?m12:life;g["s"+s.stage]+=e;g.ifrs+=e});
+  return by}
+
+/* line chart helper with crosshair */
+function lines(el,{labels,series,ymin,ymax,yfmt,xticks,height=230,width=560}){
+  const Wd=width,H=height,L=40,R=10,T=10,B=24,n=labels.length;
+  const x=i=>L+(Wd-L-R)*i/(n-1),y=v=>T+(H-T-B)*(ymax-v)/(ymax-ymin);
+  const step=(ymax-ymin)/5,mag=Math.pow(10,Math.floor(Math.log10(step))),st=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=step);
+  let g="";for(let v=Math.ceil(ymin/st)*st;v<=ymax+1e-9;v+=st)g+=`<line class="gl" x1="${L}" x2="${Wd-R}" y1="${y(v)}" y2="${y(v)}"/><text class="tk" x="${L-6}" y="${y(v)+4}" text-anchor="end">${yfmt(v)}</text>`;
+  xticks.forEach(([i,t])=>g+=`<text class="tk" x="${x(i)}" y="${H-6}" text-anchor="middle">${t}</text>`);
+  series.forEach(s=>{const pts=s.values.map((v,i)=>v==null?null:`${x(i)},${y(v)}`);let d="",pen=false;pts.forEach(p=>{if(p){d+=(pen?"L":"M")+p;pen=true}else pen=false});
+    g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5 4"':""} stroke-linejoin="round"/>`});
+  g+=`<line class="hv" y1="${T}" y2="${H-B}" stroke="var(--muted)" opacity="0"/><rect class="hit" x="${L}" y="0" width="${Wd-L-R}" height="${H}" fill="transparent"/>`;
+  el.innerHTML=`<svg viewBox="0 0 ${Wd} ${H}" role="img">${g}</svg><div class="tip"></div>`;
+  const svg=el.querySelector("svg"),tip=el.querySelector(".tip"),hv=svg.querySelector(".hv");
+  svg.querySelector(".hit").addEventListener("pointermove",ev=>{const r=svg.getBoundingClientRect();let i=Math.round(((ev.clientX-r.left)*Wd/r.width-L)/(Wd-L-R)*(n-1));i=Math.max(0,Math.min(n-1,i));
+    hv.setAttribute("x1",x(i));hv.setAttribute("x2",x(i));hv.setAttribute("opacity",1);
+    tip.innerHTML=`<b>${labels[i]}</b>`+series.filter(s=>s.values[i]!=null).map(s=>`<div class="row"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color}"></span> ${s.name}</span><span>${yfmt(s.values[i])}</span></div>`).join("");
+    tip.style.opacity=1;const px=x(i)*r.width/Wd;tip.style.left=Math.min(Math.max(px+12,0),r.width-tip.offsetWidth)+"px";tip.style.top="4px"});
+  svg.querySelector(".hit").addEventListener("pointerleave",()=>{tip.style.opacity=0;hv.setAttribute("opacity",0)});
+}
+
+/* unemployment chart: 36 months history + 36 months scenarios */
+(function(){const h=D.history.values,nh=h.length,mlab=s=>{const [y,m]=s.split("-");return new Date(+y,+m-1,1).toLocaleDateString("en-US",{month:"short",year:"numeric"})};const labels=[...D.history.labels.map(mlab),...Array.from({length:36},(_,i)=>{const d=new Date(2026,9+i,1);return d.toLocaleDateString("en-US",{month:"short",year:"numeric"})})];
+  const series=[{name:"History",color:"var(--ink)",values:[...h,...Array(36).fill(null)]}];
+  SC.forEach((s,i)=>series.push({name:s,color:COL[i],values:[...Array(nh-1).fill(null),h[nh-1],...D.paths[s]]}));
+  const xt=[];labels.forEach((l,i)=>{if(l.startsWith("Jan"))xt.push([i,l.slice(-4)])});
+  lines($("c-u"),{labels,series,ymin:3,ymax:9.5,yfmt:v=>v.toFixed(1),xticks:xt});
+  $("lg-u").innerHTML=series.map(s=>`<span><i style="background:${s.color}"></i>${s.name}</span>`).join("");})();
+
+/* vintage curves */
+(function(){const vs=Object.keys(D.vintages),vc=["var(--s1)","var(--s2)","var(--s3)","var(--s4)","var(--s5)","var(--s6)"];
+  const n=Math.max(...vs.map(v=>D.vintages[v].length));const labels=Array.from({length:n},(_,i)=>`Month ${i} on book`);
+  const series=vs.map((v,i)=>({name:v,color:vc[i],values:[...D.vintages[v],...Array(n-D.vintages[v].length).fill(null)].map(x=>x==null?null:x*100)}));
+  const mx=Math.max(...series.flatMap(s=>s.values.filter(x=>x!=null)));
+  lines($("c-v"),{labels,series,ymin:0,ymax:Math.ceil(mx+1),yfmt:v=>v.toFixed(1)+"%",xticks:Array.from({length:Math.floor((n-1)/6)+1},(_,k)=>[k*6,String(k*6)]),height:300,width:1100});
+  $("lg-v").innerHTML=series.map(s=>`<span><i style="background:${s.color}"></i>${s.name}</span>`).join("");})();
+
+/* backtest grouped bars */
+(function(){const el=$("c-bt"),Wd=560,H=230,L=40,R=10,T=14,B=24,g0=D.backtest;
+  const keys=[["actual","var(--ink2)","Actual"],["model_actual_macro","var(--s1)","Model"],["historical_rate","var(--s2)","Historical"]];
+  const mx=Math.max(...g0.flatMap(r=>keys.map(k=>r[k[0]])))*1.15,y=v=>T+(H-T-B)*(1-v/mx),bw=(Wd-L-R)/g0.length;
+  let g="";for(let v=0;v<=mx;v+=0.02)g+=`<line class="gl" x1="${L}" x2="${Wd-R}" y1="${y(v)}" y2="${y(v)}"/><text class="tk" x="${L-6}" y="${y(v)+4}" text-anchor="end">${(v*100).toFixed(0)}%</text>`;
+  g0.forEach((r,i)=>{keys.forEach(([k,c,n],j)=>{const w=bw*.22,x=L+i*bw+bw*.15+j*(w+2);g+=`<rect x="${x}" y="${y(r[k])}" width="${w}" height="${y(0)-y(r[k])}" rx="2" fill="${c}"><title>Grade ${r.grade} · ${n}: ${(r[k]*100).toFixed(2)}%</title></rect>`});
+    g+=`<text class="tk" x="${L+i*bw+bw/2}" y="${H-6}" text-anchor="middle">Grade ${r.grade}</text>`});
+  el.innerHTML=`<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Predicted vs actual 12-month charge-off rate by grade">${g}</svg>`;
+  const t=D.backtest_total;$("bt-note").textContent=`Fitted on data to March 2025 and scored on the following 12 months. Book-wide: actual ${(t.actual*100).toFixed(2)}%, model ${(t.model_actual_macro*100).toFixed(2)}%, trailing historical loss rate ${(t.historical_rate*100).toFixed(2)}%. The historical rate misses the shift to riskier grades in 2025; the model, which prices each loan's grade and age, does not.`;})();
+
+function rollforward(){const rows=D.rollforward[basis],el=$("c-rf"),Wd=560,H=250,L=40,R=10,T=18,B=40;
+  const lab=["Jun 30","Charge-offs","Recov.","New loans","Payoffs","Replenish","Migration","Macro","Sep 30"];
+  let run=0;const bars=rows.map((r,i)=>{const v=r[1];if(i===0){run=v;return{lo:0,hi:v,v,tot:true}}if(i===rows.length-1)return{lo:0,hi:v,v,tot:true};const b={lo:Math.min(run,run+v),hi:Math.max(run,run+v),v};run+=v;return b});
+  const mx=Math.max(...bars.map(b=>b.hi))*1.12,y=v=>T+(H-T-B)*(1-v/mx),bw=(Wd-L-R)/bars.length;
+  let g="";for(let v=0;v<=mx;v+=2e6)g+=`<line class="gl" x1="${L}" x2="${Wd-R}" y1="${y(v)}" y2="${y(v)}"/><text class="tk" x="${L-6}" y="${y(v)+4}" text-anchor="end">${v/1e6}</text>`;
+  bars.forEach((b,i)=>{const x=L+i*bw+bw*.15,w=bw*.7,c=b.tot?"var(--ink2)":b.v>=0?"var(--down)":"var(--up)";
+    g+=`<rect x="${x}" y="${y(b.hi)}" width="${w}" height="${Math.max(1,y(b.lo)-y(b.hi))}" rx="2" fill="${c}"><title>${rows[i][0]}: ${fm(b.v)}</title></rect>`;
+    g+=`<text class="lab" x="${x+w/2}" y="${y(b.hi)-4}" text-anchor="middle">${b.tot?(b.v/1e6).toFixed(1):(b.v>=0?"+":"−")+Math.abs(b.v/1e6).toFixed(2)}</text>`;
+    g+=`<text class="tk" x="${x+w/2}" y="${H-B+16}" text-anchor="middle">${lab[i]}</text>`});
+  el.innerHTML=`<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Allowance roll-forward waterfall">${g}</svg>`;}
+$("b-cecl").addEventListener("click",()=>{basis="cecl";$("b-cecl").setAttribute("aria-pressed","true");$("b-ifrs").setAttribute("aria-pressed","false");rollforward()});
+$("b-ifrs").addEventListener("click",()=>{basis="ifrs9";$("b-ifrs").setAttribute("aria-pressed","true");$("b-cecl").setAttribute("aria-pressed","false");rollforward()});
+
+function render(){
+  SC.forEach((_,i)=>$("o"+i).textContent=(W[i]*100).toFixed(0)+"%");
+  const by=alw(),G=Object.keys(by).sort();const tot=G.reduce((a,g)=>{for(const k in by[g])a[k]=(a[k]||0)+by[g][k];return a},{});
+  const s2=D.segments.filter(s=>s.stage>1).reduce((a,s)=>a+s.balance,0);
+  $("kpis").innerHTML=
+    `<div class="card kpi"><div class="k">CECL allowance</div><div class="v">${fm(tot.cecl)}</div><div class="s">${fp(tot.cecl/tot.bal)} of ${fm(tot.bal)} · Jun 30: ${fm(D.q2.cecl)}</div></div>`+
+    `<div class="card kpi"><div class="k">IFRS 9 allowance</div><div class="v">${fm(tot.ifrs)}</div><div class="s">${fp(tot.ifrs/tot.bal)} coverage · Jun 30: ${fm(D.q2.ifrs9)}</div></div>`+
+    `<div class="card kpi"><div class="k">CECL over IFRS 9</div><div class="v">${fm(tot.cecl-tot.ifrs)}</div><div class="s">lifetime vs 12-month on Stage 1 loans</div></div>`+
+    `<div class="card kpi"><div class="k">Stage 2 + 3 balance</div><div class="v">${fm(s2)}</div><div class="s">${fp(s2/tot.bal)} of the book</div></div>`;
+  $("t-grade").innerHTML=`<thead><tr><th>Grade</th><th>Loans</th><th>Balance</th><th>CECL</th><th>Coverage</th><th>IFRS 9 Stage 1</th><th>Stage 2</th><th>Stage 3</th><th>IFRS 9 total</th><th>Coverage</th></tr></thead><tbody>`+
+    G.map(g=>{const r=by[g];return`<tr><td>${g}</td><td>${r.loans.toLocaleString()}</td><td>${fm(r.bal)}</td><td>${fm(r.cecl)}</td><td>${fp(r.cecl/r.bal)}</td><td>${fm(r.s1)}</td><td>${fm(r.s2)}</td><td>${fm(r.s3)}</td><td>${fm(r.ifrs)}</td><td>${fp(r.ifrs/r.bal)}</td></tr>`}).join("")+
+    `<tr class="tot"><td>Total</td><td>${tot.loans.toLocaleString()}</td><td>${fm(tot.bal)}</td><td>${fm(tot.cecl)}</td><td>${fp(tot.cecl/tot.bal)}</td><td>${fm(tot.s1)}</td><td>${fm(tot.s2)}</td><td>${fm(tot.s3)}</td><td>${fm(tot.ifrs)}</td><td>${fp(tot.ifrs/tot.bal)}</td></tr></tbody>`;
+}
+$("lgd").textContent=Object.entries(D.lgd).map(([g,v])=>`${g} ${(v*100).toFixed(0)}%`).join(", ");
+read();render();rollforward();
+</script>
+</body>
+</html>
