@@ -112,7 +112,7 @@ see. Because the true process is known, the models can be checked against it.
 
 ## How this was built
 
-Built with AI-assisted coding (Claude). Model design, validation and review are my own.
+Built with AI-assisted coding. Model design, validation and review are my own.
 
 ## License
 
